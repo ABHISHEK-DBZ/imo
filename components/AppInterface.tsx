@@ -2,12 +2,15 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Camera, CameraOff, Volume2, MessageSquare, Settings, ArrowLeft, Globe, AlertTriangle } from 'lucide-react';
+import { Mic, MicOff, Camera, CameraOff, Volume2, MessageSquare, Settings, ArrowLeft, Globe, AlertTriangle, Play } from 'lucide-react';
 import Link from 'next/link';
 import Script from 'next/script';
+import dynamic from 'next/dynamic';
 import { enhanceMeaning } from '@/lib/nlpEngine';
 import { recognizeGesture } from '@/lib/gestureRecognition';
 import { detectEmotion } from '@/lib/emotionEngine';
+
+const SignAvatar = dynamic(() => import('@/components/SignAvatar'), { ssr: false });
 
 // Context for global access if needed, or just cast window
 declare global {
@@ -52,6 +55,28 @@ export default function AppInterface() {
         contextRef.current = currentContext;
         languageRef.current = selectedLanguage;
     }, [currentContext, selectedLanguage]);
+
+    // Reverse Mode State
+    const [isReverseMode, setIsReverseMode] = useState(false);
+    const [reverseInput, setReverseInput] = useState("");
+    const [isAvatarPlaying, setIsAvatarPlaying] = useState(false);
+
+    // Simulate Location
+    const simulateLocation = (loc: string) => {
+        if (loc === 'Hospital') {
+            setCurrentContext('Hospital');
+            handleSpeak("Detected Location: City Hospital. Switching to Medical mode.");
+        } else {
+            setCurrentContext('General');
+            handleSpeak("Location Normal. Switching to General mode.");
+        }
+    };
+
+    const handleCreateSignSequence = () => {
+        if (!reverseInput) return;
+        setIsAvatarPlaying(true);
+        // Reset after simple timeout is handled by component, but we can track it here too
+    };
 
     // Emergency Reset Effect
     useEffect(() => {
@@ -271,7 +296,7 @@ export default function AppInterface() {
     };
 
     return (
-        <div className={`min-h-screen bg-background text-foreground flex flex-col md:flex-row overflow-hidden transition-colors duration-500 ${isEmergencyMode ? 'bg-red-950 animate-pulse' : ''}`}>
+        <div className={`min-h-screen bg-background text-foreground flex flex-col md:flex-row overflow-hidden transition-colors duration-500 ${isEmergencyMode ? 'bg-red-950 animate-pulse' : ''} ${isReverseMode ? 'bg-slate-900' : ''}`}>
             {/* Load Scripts */}
             <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" strategy="lazyOnload" />
             <Script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" strategy="lazyOnload" />
@@ -294,8 +319,17 @@ export default function AppInterface() {
                     ))}
                 </div>
 
-                {/* Language Selector */}
-                <div className="flex flex-col gap-2">
+                {/* Language, Mode & Tools */}
+                <div className="flex flex-col gap-2 items-center">
+                    <button
+                        onClick={() => setIsReverseMode(!isReverseMode)}
+                        className={`p-2 rounded-xl text-xs font-bold flex flex-col items-center transition-all ${isReverseMode ? 'bg-blue-600 text-white' : 'hover:bg-white/10'}`}
+                        title="Toggle Sign Avatar (Reverse Mode)"
+                    >
+                        <MessageSquare className="w-5 h-5 mb-1" />
+                        {isReverseMode ? 'SIGN' : 'CAM'}
+                    </button>
+
                     <button
                         onClick={() => setSelectedLanguage(l => l === 'en-US' ? 'hi-IN' : 'en-US')}
                         className="p-2 rounded-xl hover:bg-white/10 text-xs font-bold flex flex-col items-center"
@@ -304,6 +338,16 @@ export default function AppInterface() {
                         <Globe className="w-5 h-5 mb-1" />
                         {selectedLanguage === 'en-US' ? 'EN' : 'HI'}
                     </button>
+
+                    {/* Dev Tool: Simulate Location */}
+                    <button
+                        onClick={() => simulateLocation('Hospital')}
+                        className="p-2 rounded-xl hover:bg-white/10 text-[10px] opacity-50 hover:opacity-100"
+                        title="Simulate GPS: Hospital"
+                    >
+                        GPS
+                    </button>
+
                     {isEmergencyMode && (
                         <button onClick={() => setIsEmergencyMode(false)} className="p-2 bg-red-600 rounded-xl animate-bounce">
                             <AlertTriangle className="w-6 h-6 text-white" />
@@ -318,49 +362,106 @@ export default function AppInterface() {
                 <header className="h-16 flex items-center justify-between px-6 border-b border-white/5 bg-background/50 backdrop-blur-sm z-10">
                     <div className="flex items-center gap-4">
                         <span className="text-xl font-bold">SAMBHAV <span className="text-primary text-xs ml-2">ADVANCED</span></span>
-                        <div className="px-3 py-1 bg-white/5 rounded-full text-xs flex items-center gap-2">
-                            Emotion: <span className={`${currentEmotion === 'Urgent' ? 'text-red-400 font-bold' : 'text-emerald-400'}`}>{currentEmotion.toUpperCase()}</span>
-                        </div>
+                        {!isReverseMode && (
+                            <div className="px-3 py-1 bg-white/5 rounded-full text-xs flex items-center gap-2">
+                                Emotion: <span className={`${currentEmotion === 'Urgent' ? 'text-red-400 font-bold' : 'text-emerald-400'}`}>{currentEmotion.toUpperCase()}</span>
+                            </div>
+                        )}
+                        {isReverseMode && <span className="text-blue-400 text-xs font-mono border border-blue-400 px-2 py-0.5 rounded">REVERSE MODE (TEXT-TO-SIGN)</span>}
                     </div>
-                    <button
-                        onClick={() => setIsCameraOn(!isCameraOn)}
-                        className={`p-3 rounded-full transition-colors ${isCameraOn ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}
-                    >
-                        {isCameraOn ? <CameraOff /> : <Camera />}
-                    </button>
+                    {!isReverseMode && (
+                        <button
+                            onClick={() => setIsCameraOn(!isCameraOn)}
+                            className={`p-3 rounded-full transition-colors ${isCameraOn ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}
+                        >
+                            {isCameraOn ? <CameraOff /> : <Camera />}
+                        </button>
+                    )}
                 </header>
 
-                {/* Video Area */}
-                <div className="flex-1 relative bg-black/50 overflow-hidden flex items-center justify-center">
-                    {!isCameraOn && <div className="text-white/50">Click Camera to Start AI Engine</div>}
+                {/* Content Area */}
+                <div className="flex-1 relative bg-black/50 overflow-hidden flex items-center justify-center p-6">
 
-                    {isCameraOn && <div className="absolute top-4 left-4 z-50 bg-black/60 px-3 py-1 rounded-full text-xs font-mono border border-white/10">
-                        {debugStatus}
-                    </div>}
-
-                    <video ref={videoRef} className={`absolute inset-0 w-full h-full object-cover ${isCameraOn ? 'opacity-100' : 'opacity-0'}`} playsInline />
-                    <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
-
-                    {/* Output Overlay */}
-                    <AnimatePresence>
-                        {(enhancedSentence || isEmergencyMode) && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0 }}
-                                className={`absolute bottom-32 left-1/2 -translate-x-1/2 px-8 py-4 rounded-full flex flex-col items-center ${isEmergencyMode ? 'bg-red-600 text-white shadow-red-glow' : 'glass-card'}`}
-                            >
-                                <span className="text-sm opacity-70 mb-1">{detectedSign} ({currentEmotion})</span>
-                                <span className="text-2xl font-bold whitespace-nowrap">
-                                    {isEmergencyMode ? "EMERGENCY! I NEED HELP!" : enhancedSentence}
-                                </span>
-                                <button onClick={() => handleSpeak(isEmergencyMode ? "EMERGENCY! I NEED HELP!" : enhancedSentence || "")} className="mt-2 p-2 rounded-full bg-white/20">
-                                    <Volume2 className="w-4 h-4" />
+                    {isReverseMode ? (
+                        // REVERSE MODE: SIGN AVATAR
+                        <div className="w-full max-w-4xl h-full flex flex-col gap-6">
+                            <div className="flex-1">
+                                <SignAvatar
+                                    text={reverseInput}
+                                    isPlaying={isAvatarPlaying}
+                                    onComplete={() => setIsAvatarPlaying(false)}
+                                />
+                            </div>
+                            <div className="flex gap-4">
+                                <input
+                                    type="text"
+                                    value={reverseInput}
+                                    onChange={(e) => setReverseInput(e.target.value)}
+                                    placeholder="Type here to convert to Sign Language..."
+                                    className="flex-1 bg-white/10 border border-white/10 rounded-xl px-4 py-3 text-lg outline-none focus:border-blue-500"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleCreateSignSequence()}
+                                />
+                                <button
+                                    onClick={handleCreateSignSequence}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 rounded-xl font-bold flex items-center gap-2"
+                                >
+                                    <Play className="w-5 h-5" /> GENERATE SIGN
                                 </button>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                            </div>
+                        </div>
+                    ) : (
+                        // STANDARD MODE: CAMERA INPUT
+                        <>
+                            {!isCameraOn && <div className="text-white/50">Click Camera to Start AI Engine</div>}
+
+                            {isCameraOn && <div className="absolute top-4 left-4 z-50 bg-black/60 px-3 py-1 rounded-full text-xs font-mono border border-white/10">
+                                {debugStatus}
+                            </div>}
+
+                            <video ref={videoRef} className={`absolute inset-0 w-full h-full object-cover ${isCameraOn ? 'opacity-100' : 'opacity-0'}`} playsInline />
+                            <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+
+                            {/* Output Overlay */}
+                            <AnimatePresence>
+                                {(enhancedSentence || isEmergencyMode) && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0 }}
+                                        className={`absolute bottom-32 left-1/2 -translate-x-1/2 px-8 py-4 rounded-full flex flex-col items-center ${isEmergencyMode ? 'bg-red-600 text-white shadow-red-glow' : 'glass-card'}`}
+                                    >
+                                        <span className="text-sm opacity-70 mb-1">{detectedSign} ({currentEmotion})</span>
+                                        <span className="text-2xl font-bold whitespace-nowrap">
+                                            {isEmergencyMode ? "EMERGENCY! I NEED HELP!" : enhancedSentence}
+                                        </span>
+                                        <button onClick={() => handleSpeak(isEmergencyMode ? "EMERGENCY! I NEED HELP!" : enhancedSentence || "")} className="mt-2 p-2 rounded-full bg-white/20">
+                                            <Volume2 className="w-4 h-4" />
+                                        </button>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </>
+                    )}
                 </div>
+
+                {/* Conversation Bar (Only in Normal Mode) */}
+                {!isReverseMode && (
+                    <div className="h-24 bg-background border-t border-white/10 p-4 flex items-center gap-4">
+                        <button className="h-14 w-14 rounded-full bg-primary flex items-center justify-center shadow-lg hover:scale-105 transition-transform">
+                            <Mic className="w-6 h-6 text-white" />
+                        </button>
+                        <div className="flex-1 h-14 bg-white/5 rounded-2xl flex items-center px-6 text-muted-foreground border border-white/5 focus-within:border-primary/50 transition-colors">
+                            <input
+                                type="text"
+                                placeholder="Type to speak..."
+                                className="bg-transparent border-none outline-none w-full text-foreground placeholder-muted-foreground/50"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSpeak((e.target as HTMLInputElement).value);
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );
